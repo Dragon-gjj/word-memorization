@@ -97,7 +97,6 @@ def send_ai_query(messages: List[Dict], user_input: str) -> str:
 		word = tokens[0] if tokens else "单词"
 		return f"（本地模拟回答）关于 '{word}'：建议先记词义，再联想一个短句；例如：'{word}' — 例句：This is a sample sentence containing {word}."
 
-	# 如果用户选择 custom 并提供了 base URL，则尝试用 requests 调用
 	# 千问（qianwen）专用分支（部分平台使用不同的认证 header，请根据你申请到的文档调整）
 	if provider == "qianwen" and api_base:
 		if requests is None:
@@ -204,8 +203,8 @@ def main():
 
 		# --- AI 提供方与 API 配置（可选择国内自定义兼容接口）
 		st.write("---")
-		st.write("AI 服务配置（默认 OpenAI，可配置自定义/国内兼容接口）")
-		provider = st.selectbox("选择 AI 提供方", options=["openai", "qianwen", "custom"], index=0, key="ai_provider_select")
+		st.write("AI 服务配置（可选：OpenAI 或 千问 qianwen）")
+		provider = st.selectbox("选择 AI 提供方", options=["openai", "qianwen"], index=0, key="ai_provider_select")
 		# 默认从环境读取已有配置
 		# 若选择千问（qianwen），给出常见的建议端点（可根据厂商文档调整）
 		suggest_qianwen = "https://openapi.qianwen.aliyun.com/v1/chat/completions"
@@ -239,10 +238,10 @@ def main():
 		curprov = os.environ.get("AI_PROVIDER", "openai")
 		if curprov == "openai" and os.environ.get("OPENAI_API_KEY"):
 			st.info("使用 OpenAI（检测到 OPENAI_API_KEY）。")
-		elif curprov == "custom" and os.environ.get("AI_API_BASE"):
-			st.info(f"使用自定义 API：{os.environ.get('AI_API_BASE')}")
+		elif curprov == "qianwen" and os.environ.get("AI_API_BASE"):
+			st.info(f"使用千问 qianwen：{os.environ.get('AI_API_BASE')}")
 		else:
-			st.info("未检测到完整的 AI 配置，将使用本地模拟回答（如 openai 未配置）。")
+			st.info("未检测到完整的 AI 配置，将使用本地模拟回答（如 OpenAI/千问 未配置）。")
 		st.radio("选择模式", options=["memory", "test"], index=0 if st.session_state.mode == "memory" else 1, key="mode_radio")
 		st.session_state.mode = st.session_state.mode_radio
 
