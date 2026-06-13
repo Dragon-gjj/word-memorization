@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import io
 import os
 import random
 from typing import List, Dict
@@ -11,9 +12,30 @@ except Exception:
 	openai = None
 
 try:
-    import requests
+	import requests
 except Exception:
-    requests = None
+	requests = None
+
+# 常量
+SYSTEM_PROMPT = (
+	"你是一个只回答关于单词、词义、拼写、例句以及记忆方法的助教，不回答其他内容。"
+	"若用户问与单词无关的问题，则简短拒绝并引导回到单词主题。用中文回答。"
+)
+ALLOWED_KEYWORDS = [
+	"单词",
+	"记忆",
+	"拼写",
+	"词义",
+	"意思",
+	"例句",
+	"近义",
+	"联想",
+	"记法",
+	"词根",
+	"词缀",
+	"如何记",
+	"怎么记",
+]
 
 # 文件路径（在当前脚本目录）
 BASE_DIR = os.path.dirname(__file__)
@@ -52,7 +74,7 @@ def parse_wordfile(file_bytes) -> List[Dict]:
 	if "," in first or "\t" in first:
 		sep = "," if first.count(",") >= first.count("\t") else "\t"
 		try:
-			df = pd.read_csv(pd.compat.StringIO(s), sep=sep)
+			df = pd.read_csv(io.StringIO(s), sep=sep)
 			if "english" in df.columns and "chinese" in df.columns:
 				for _, r in df.iterrows():
 					rows.append({"english": str(r["english"]).strip(), "chinese": str(r["chinese"]).strip()})
@@ -79,75 +101,73 @@ def load_sample() -> List[Dict]:
 	return []
 
 
+def call_qianwen(api_base: str, api_key: str, messages: List[Dict], user_input: str) -> str:
+	"""向千问（qianwen）兼容端点发送请求并返回文本结果（若失败返回 None）。"""
+	try:
+		headers = {"Content-Type": "application/json"}
+		if api_key:
+			# 常见做法是放在 Authorization 或 X-API-KEY 中，请根据实际密钥要求调整
+			headers["Authorization"] = f"Bearer {api_key}"
+		payload = {
+			"model": "qwen-turbo",
+			"messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages + [{"role": "user", "content": user_input}],
+			"max_tokens": 400,
+			"temperature": 0.6,
+		}
+		resp = requests.post(api_base, json=payload, headers=headers, timeout=15)
+		if resp.status_code != 200:
+			return f"千问 API 请求失败：{resp.status_code} {resp.text}"
+		try:
+			data = resp.json()
+		except Exception:
+			return resp.text[:1000]
+
+		if isinstance(data, dict):
+			# OpenAI 兼容
+			if "choices" in data and isinstance(data["choices"], list) and data["choices"]:
+				return data["choices"][0].get("message", {}).get("content", "").strip()
+			# 千问可能返回 data.content
+			if "data" in data and isinstance(data["data"], dict) and "content" in data["data"]:
+				return str(data["data"]["content"]).strip()
+			if "answer" in data:
+				return str(data["answer"]).strip()
+		return str(data)[:1000]
+	except Exception as e:
+		return f"千问 API 调用出错：{e}"
+
+
 def send_ai_query(messages: List[Dict], user_input: str) -> str:
-	"""简单过滤：只允许与单词/记忆相关的问题，否则拒绝回答。若配置了 OpenAI key 则调用 API。"""
-	allowed_keywords = ["单词", "记忆", "拼写", "词义", "意思", "例句", "近义", "联想", "记法", "词根", "词缀", "如何记", "怎么记"]
+	"""过滤用户输入，仅允许与单词记忆相关的问题；根据配置调用 qianwen 或 openai，失败时回退本地模拟回答。"""
 	low = user_input.lower()
-	if not any(k in low for k in allowed_keywords) and len(low.split()) > 5:
+	if not any(k in low for k in ALLOWED_KEYWORDS) and len(low.split()) > 5:
 		return "抱歉，我只能回答与单词和背记相关的问题。请把问题限定为单词的释义、拼写、例句或记忆方法等。"
 
-	# 优先检查会话/环境中是否配置了自定义提供方
-	provider = os.environ.get("AI_PROVIDER", os.environ.get("OPENAI_PROVIDER", "openai"))
+	provider = os.environ.get("AI_PROVIDER", "openai")
 	api_base = os.environ.get("AI_API_BASE", "")
 	api_key = os.environ.get("AI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
 
-	# 本地简单应答（始终可用的回退）
 	def local_reply():
 		tokens = user_input.split()
 		word = tokens[0] if tokens else "单词"
 		return f"（本地模拟回答）关于 '{word}'：建议先记词义，再联想一个短句；例如：'{word}' — 例句：This is a sample sentence containing {word}."
 
-	# 千问（qianwen）专用分支（部分平台使用不同的认证 header，请根据你申请到的文档调整）
-	if provider == "qianwen" and api_base:
+	# qianwen 分支
+	if provider == "qianwen":
+		if not api_base:
+			return "未配置千问 API 地址（AI_API_BASE）。请在左侧配置并保存。"
 		if requests is None:
-			return "未安装 requests，无法使用千问 API。请安装 requests 或切换到其他提供方。"
-		try:
-			headers = {"Content-Type": "application/json"}
-			# 千问可能使用 X-API-KEY 或 Authorization: Bearer <key>，以你拿到的密钥格式为准
-			if api_key:
-				headers["Authorization"] = f"Bearer {api_key}"
-			payload = {
-				"model": "qwen-turbo", 
-				"messages": [{"role": "system", "content": "你是一个只回答关于单词、词义、拼写、例句以及记忆方法的助教。用中文回答。"}] + messages + [{"role": "user", "content": user_input}],
-				"max_tokens": 400,
-				"temperature": 0.6,
-			}
-			resp = requests.post(api_base, json=payload, headers=headers, timeout=15)
-			if resp.status_code == 200:
-				try:
-					data = resp.json()
-					# 千问返回格式可能与 OpenAI 略有不同；尝试常见字段
-					if isinstance(data, dict):
-						if "choices" in data and isinstance(data["choices"], list) and data["choices"]:
-							return data["choices"][0].get("message", {}).get("content", "").strip() or local_reply()
-						if "data" in data and isinstance(data["data"], dict) and "content" in data["data"]:
-							return str(data["data"]["content"]).strip()
-						if "answer" in data:
-							return str(data["answer"]).strip()
-						# fallback to string
-						return str(data)[:1000]
-				except Exception:
-					return resp.text[:1000]
-			else:
-				return f"千问 API 请求失败：{resp.status_code} {resp.text}"
-		except Exception as e:
-			return f"千问 API 调用出错：{e}"
-	
-	# (已移除 custom 分支，仅保留 openai 与 qianwen)
+			return "未安装 requests，无法使用千问 API。请安装 requests 或选择 OpenAI。"
+		return call_qianwen(api_base, api_key, messages, user_input) or local_reply()
 
-	# 否则尝试使用 openai 官方库（若可用）
+	# openai 分支
 	if openai is None:
 		return local_reply()
-
 	if not api_key:
-		return "未配置 OpenAI API Key 或自定义 API Key，无法使用 AI 功能。请在左侧配置。"
-
-	openai.api_key = api_key
-	system_prompt = "你是一个只回答关于单词、词义、拼写、例句以及记忆方法的助教，不回答其他内容。若用户问与单词无关的问题，则简短拒绝并引导回到单词主题。用中文回答。"
+		return "未配置 OpenAI API Key，无法使用 AI 功能。请在左侧配置。"
 	try:
 		chat = openai.ChatCompletion.create(
 			model="gpt-3.5-turbo",
-			messages=[{"role": "system", "content": system_prompt}] + messages + [{"role": "user", "content": user_input}],
+			messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages + [{"role": "user", "content": user_input}],
 			temperature=0.6,
 			max_tokens=400,
 		)
