@@ -225,7 +225,7 @@ def main():
 									st.session_state.wrongbook.append(entry)
 									save_wrongbook(st.session_state.wrongbook)
 							st.session_state.test_progress["asked"] += 1
-							st.experimental_rerun()
+							st.rerun()
 					else:
 						# 完成考察
 						total = st.session_state.test_progress["total"]
@@ -261,7 +261,7 @@ def main():
 				messages.append({"role": "user" if role == "user" else "assistant", "content": text})
 			resp = send_ai_query(messages, user_input)
 			st.session_state.chat_history.append(("ai", resp))
-			st.experimental_rerun()
+			st.rerun()
 
 
 if __name__ == "__main__":

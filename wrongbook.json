@@ -2,5 +2,41 @@
   {
     "english": "computer",
     "chinese": "电脑"
+  },
+  {
+    "english": "hello",
+    "chinese": "你好"
+  },
+  {
+    "english": "quiz",
+    "chinese": "小测验"
+  },
+  {
+    "english": "memory",
+    "chinese": "记忆"
+  },
+  {
+    "english": "english",
+    "chinese": "chinese"
+  },
+  {
+    "english": "learn",
+    "chinese": "学习"
+  },
+  {
+    "english": "study",
+    "chinese": "学习"
+  },
+  {
+    "english": "book",
+    "chinese": "书"
+  },
+  {
+    "english": "practice",
+    "chinese": "练习"
+  },
+  {
+    "english": "apple",
+    "chinese": "苹果"
   }
 ]
