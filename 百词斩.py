@@ -10,6 +10,11 @@ try:
 except Exception:
 	openai = None
 
+try:
+    import requests
+except Exception:
+    requests = None
+
 # 文件路径（在当前脚本目录）
 BASE_DIR = os.path.dirname(__file__)
 WRONGBOOK_PATH = os.path.join(BASE_DIR, "wrongbook.json")
@@ -81,17 +86,64 @@ def send_ai_query(messages: List[Dict], user_input: str) -> str:
 	if not any(k in low for k in allowed_keywords) and len(low.split()) > 5:
 		return "抱歉，我只能回答与单词和背记相关的问题。请把问题限定为单词的释义、拼写、例句或记忆方法等。"
 
-	if openai is None:
-		# 本地简单应答：如果看起来像是单词查询，尝试返回一个模板回答
+	# 优先检查会话/环境中是否配置了自定义提供方
+	provider = os.environ.get("AI_PROVIDER", os.environ.get("OPENAI_PROVIDER", "openai"))
+	api_base = os.environ.get("AI_API_BASE", "")
+	api_key = os.environ.get("AI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+
+	# 本地简单应答（始终可用的回退）
+	def local_reply():
 		tokens = user_input.split()
-		word = tokens[0]
+		word = tokens[0] if tokens else "单词"
 		return f"（本地模拟回答）关于 '{word}'：建议先记词义，再联想一个短句；例如：'{word}' — 例句：This is a sample sentence containing {word}."
 
-	key = os.environ.get("OPENAI_API_KEY")
-	if not key:
-		return "未配置 OpenAI API Key，无法使用 AI 功能。请设置环境变量 OPENAI_API_KEY 或在界面使用本地回答模式。"
+	# 如果用户选择 custom 并提供了 base URL，则尝试用 requests 调用
+	# 千问（qianwen）专用分支（部分平台使用不同的认证 header，请根据你申请到的文档调整）
+	if provider == "qianwen" and api_base:
+		if requests is None:
+			return "未安装 requests，无法使用千问 API。请安装 requests 或切换到其他提供方。"
+		try:
+			headers = {"Content-Type": "application/json"}
+			# 千问可能使用 X-API-KEY 或 Authorization: Bearer <key>，以你拿到的密钥格式为准
+			if api_key:
+				headers["Authorization"] = f"Bearer {api_key}"
+			payload = {
+				"model": "qwen-turbo", 
+				"messages": [{"role": "system", "content": "你是一个只回答关于单词、词义、拼写、例句以及记忆方法的助教。用中文回答。"}] + messages + [{"role": "user", "content": user_input}],
+				"max_tokens": 400,
+				"temperature": 0.6,
+			}
+			resp = requests.post(api_base, json=payload, headers=headers, timeout=15)
+			if resp.status_code == 200:
+				try:
+					data = resp.json()
+					# 千问返回格式可能与 OpenAI 略有不同；尝试常见字段
+					if isinstance(data, dict):
+						if "choices" in data and isinstance(data["choices"], list) and data["choices"]:
+							return data["choices"][0].get("message", {}).get("content", "").strip() or local_reply()
+						if "data" in data and isinstance(data["data"], dict) and "content" in data["data"]:
+							return str(data["data"]["content"]).strip()
+						if "answer" in data:
+							return str(data["answer"]).strip()
+						# fallback to string
+						return str(data)[:1000]
+				except Exception:
+					return resp.text[:1000]
+			else:
+				return f"千问 API 请求失败：{resp.status_code} {resp.text}"
+		except Exception as e:
+			return f"千问 API 调用出错：{e}"
+	
+	# (已移除 custom 分支，仅保留 openai 与 qianwen)
 
-	openai.api_key = key
+	# 否则尝试使用 openai 官方库（若可用）
+	if openai is None:
+		return local_reply()
+
+	if not api_key:
+		return "未配置 OpenAI API Key 或自定义 API Key，无法使用 AI 功能。请在左侧配置。"
+
+	openai.api_key = api_key
 	system_prompt = "你是一个只回答关于单词、词义、拼写、例句以及记忆方法的助教，不回答其他内容。若用户问与单词无关的问题，则简短拒绝并引导回到单词主题。用中文回答。"
 	try:
 		chat = openai.ChatCompletion.create(
@@ -150,7 +202,47 @@ def main():
 			else:
 				st.warning("未找到示例文件 sample_words.csv")
 
+		# --- AI 提供方与 API 配置（可选择国内自定义兼容接口）
 		st.write("---")
+		st.write("AI 服务配置（默认 OpenAI，可配置自定义/国内兼容接口）")
+		provider = st.selectbox("选择 AI 提供方", options=["openai", "qianwen", "custom"], index=0, key="ai_provider_select")
+		# 默认从环境读取已有配置
+		# 若选择千问（qianwen），给出常见的建议端点（可根据厂商文档调整）
+		suggest_qianwen = "https://openapi.qianwen.aliyun.com/v1/chat/completions"
+		default_base = os.environ.get("AI_API_BASE", "")
+		if provider == "qianwen" and not default_base:
+			default_base = suggest_qianwen
+		default_key = os.environ.get("AI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+		base_input = st.text_input("自定义 API Base（例如：https://api.yourprovider.com/v1/chat）", value=default_base, key="ai_api_base_input")
+		key_input = st.text_input("API Key", value=default_key, type="password", key="ai_api_key_input")
+		cols_key = st.columns([1, 1])
+		if cols_key[0].button("保存配置"):
+			# 保存到会话环境（仅本次运行）
+			os.environ["AI_PROVIDER"] = provider
+			if base_input and base_input.strip():
+				os.environ["AI_API_BASE"] = base_input.strip()
+			else:
+				if "AI_API_BASE" in os.environ:
+					del os.environ["AI_API_BASE"]
+			if key_input and key_input.strip():
+				os.environ["AI_API_KEY"] = key_input.strip()
+			else:
+				if "AI_API_KEY" in os.environ:
+					del os.environ["AI_API_KEY"]
+			st.success("AI 配置已保存到当前会话（仅本次运行）")
+		if cols_key[1].button("清除配置"):
+			for v in ("AI_PROVIDER", "AI_API_BASE", "AI_API_KEY"):
+				if v in os.environ:
+					del os.environ[v]
+			st.success("已清除 AI 配置（仅本次运行）")
+		# 显示当前检测到的状态
+		curprov = os.environ.get("AI_PROVIDER", "openai")
+		if curprov == "openai" and os.environ.get("OPENAI_API_KEY"):
+			st.info("使用 OpenAI（检测到 OPENAI_API_KEY）。")
+		elif curprov == "custom" and os.environ.get("AI_API_BASE"):
+			st.info(f"使用自定义 API：{os.environ.get('AI_API_BASE')}")
+		else:
+			st.info("未检测到完整的 AI 配置，将使用本地模拟回答（如 openai 未配置）。")
 		st.radio("选择模式", options=["memory", "test"], index=0 if st.session_state.mode == "memory" else 1, key="mode_radio")
 		st.session_state.mode = st.session_state.mode_radio
 
