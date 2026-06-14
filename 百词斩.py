@@ -220,11 +220,32 @@ def main():
 			try:
 				rows = parse_wordfile(uploaded.read())
 				if rows:
-					st.session_state.words = rows
-					st.session_state.index = 0
-					st.success(f"已导入 {len(rows)} 个单词")
+					# 将解析结果放到待确认的会话状态，等待用户点击确认导入
+					st.session_state.pending_import = rows
+					st.info(f"已解析到 {len(rows)} 条词。请确认导入。")
+					# 预览前 10 条
+					try:
+						preview_df = pd.DataFrame(rows).head(10)
+						st.table(preview_df)
+					except Exception:
+						# 如果 DataFrame 构建失败，简单列出前几项
+						for r in rows[:10]:
+							st.write(r)
+				else:
+					st.warning("未解析到任何有效单词，请检查文件格式（english,chinese 或 english<TAB>chinese）。")
 			except Exception as e:
 				st.error(f"导入失败：{e}")
+
+		# 如果有待确认的导入，显示确认/取消按钮
+		if st.session_state.get("pending_import"):
+			cols_imp = st.columns([1, 1])
+			if cols_imp[0].button("确认导入"):
+				st.session_state.words = st.session_state.pop("pending_import")
+				st.session_state.index = 0
+				st.success(f"已导入 {len(st.session_state.words)} 个单词")
+			if cols_imp[1].button("取消导入"):
+				st.session_state.pop("pending_import", None)
+				st.info("已取消导入")
 
 		if st.button("载入示例单词", key="load_sample"):
 			sample = load_sample()
