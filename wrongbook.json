@@ -1,46 +1,54 @@
 [
   {
-    "english": "computer",
-    "chinese": "电脑"
+    "english": "prescribe",
+    "chinese": "开药方"
   },
   {
-    "english": "hello",
-    "chinese": "你好"
+    "english": "corruption",
+    "chinese": "腐败"
   },
   {
-    "english": "quiz",
-    "chinese": "小测验"
+    "english": "algorithm",
+    "chinese": "算法"
   },
   {
-    "english": "memory",
-    "chinese": "记忆"
+    "english": "retention",
+    "chinese": "保留"
   },
   {
-    "english": "english",
-    "chinese": "chinese"
+    "english": "conceal",
+    "chinese": "掩盖"
   },
   {
-    "english": "learn",
-    "chinese": "学习"
+    "english": "inner",
+    "chinese": "内部的"
   },
   {
-    "english": "study",
-    "chinese": "学习"
+    "english": "endure",
+    "chinese": "忍受"
   },
   {
-    "english": "book",
-    "chinese": "书"
+    "english": "vague",
+    "chinese": "模糊的"
   },
   {
-    "english": "practice",
-    "chinese": "练习"
+    "english": "evade",
+    "chinese": "逃避"
   },
   {
-    "english": "apple",
-    "chinese": "苹果"
+    "english": "inequality",
+    "chinese": "不平等"
   },
   {
-    "english": "world",
-    "chinese": "世界"
+    "english": "reluctant",
+    "chinese": "不情愿的"
+  },
+  {
+    "english": "comply",
+    "chinese": "遵从"
+  },
+  {
+    "english": "controversial",
+    "chinese": "有争议的"
   }
 ]
