@@ -446,36 +446,89 @@ def main():
 						
 						# 根据考察类型显示不同的题目
 						if st.session_state.test_type == "spelling":
-							# 拼写检查模式
+							# 拼写检查模式（改为先提交保留结果，再显示反馈）
 							st.markdown(f"**中文提示：** {cur.get('chinese','')} ")
 							ans = st.text_input("请输入英文拼写（不区分大小写）", key=f"ans_{qidx}")
-							
-							# 添加上一题和下一题按钮
+
+							# 添加上一题和下一题按钮（浏览功能）
 							nav_cols = st.columns([1, 1, 2])
-							if nav_cols[0].button("⏮️ 上一题", key="nav_prev", disabled=(qidx == 0)):
+							if nav_cols[0].button("⏮️ 上一题", key=f"nav_prev_{qidx}", disabled=(qidx == 0)):
 								st.session_state.test_progress["asked"] = max(0, qidx - 1)
 								st.rerun()
-							if nav_cols[1].button("下一题", key="nav_next"):
+							if nav_cols[1].button("跳过（加入错题）", key=f"skip_{qidx}"):
+								# 将当前单词加入错题本（若尚未存在），然后跳到下一题
+								entry = {"english": cur.get('english'), "chinese": cur.get('chinese', '')}
+								if entry not in st.session_state.wrongbook:
+									st.session_state.wrongbook.append(entry)
+									save_wrongbook(st.session_state.wrongbook)
+									st.info("已加入错题本，已跳过当前题目")
 								if qidx < st.session_state.test_progress["total"] - 1:
 									st.session_state.test_progress["asked"] = qidx + 1
 									st.rerun()
 								else:
-									st.info("已经是最后一题了，请提交答案或结束考察")
-							
-							if st.button("✅ 提交答案", key=f"submit_{qidx}"):
-								user = ans.strip().lower()
-								target = cur.get("english"," ").strip().lower()
-								if user == target:
-									st.session_state.test_progress["correct"] += 1
-									st.success("回答正确！")
+									st.info("已经是最后一题，已加入错题；可点击结束考察")
+
+							submitted = st.session_state.answer_submitted.get(qidx, {}).get("submitted", False)
+							is_correct = st.session_state.answer_submitted.get(qidx, {}).get("is_correct", False)
+
+							if not submitted:
+								if st.button("✅ 提交答案", key=f"submit_{qidx}"):
+									user = ans.strip().lower()
+									target = cur.get("english", "").strip().lower()
+									if user == target:
+										st.session_state.test_progress["correct"] += 1
+										st.session_state.answer_submitted[qidx] = {"submitted": True, "is_correct": True, "user": user}
+									else:
+										st.session_state.answer_submitted[qidx] = {"submitted": True, "is_correct": False, "user": user}
+										# 将错误加入错题本
+										entry = {"english": cur.get('english'), "chinese": cur.get('chinese', '')}
+										if entry not in st.session_state.wrongbook:
+											st.session_state.wrongbook.append(entry)
+											save_wrongbook(st.session_state.wrongbook)
+									st.rerun()
+
+							else:
+								# 已提交，显示与选择题相似的结果页面（高亮用户答案与正确答案）
+								user_ans = st.session_state.answer_submitted[qidx].get("user", "")
+								if is_correct:
+									st.success("🎉 太棒了！回答正确！")
 								else:
-									st.error(f"回答错误，正确答案：{cur.get('english')}")
+									st.error("❌ 很遗憾，回答错误！")
+								# 显示正确答案与用户答案对比
+								st.markdown("---")
+								st.markdown(f"### ✅ 正确答案： {cur.get('english')}")
+								st.markdown(f"**你的回答：** {user_ans}")
+								# 若回答错误，进一步强调并在视觉上区分
+								if not is_correct:
+									st.markdown("### 📌 建议复习：")
+									st.info(f"请复习：{cur.get('english')} — {cur.get('chinese','')}")
+								# 同样将错误加入错题本（若尚未加入） — 已在提交时处理
+								# 操作按钮：学会了（移除错题并下一题） / 结束考察
+								btns = st.columns([1, 1])
+								if btns[0].button("学会了，下一道", key=f"learned_{qidx}"):
 									entry = {"english": cur.get('english'), "chinese": cur.get('chinese','')}
-									if entry not in st.session_state.wrongbook:
-										st.session_state.wrongbook.append(entry)
-										save_wrongbook(st.session_state.wrongbook)
-								st.session_state.test_progress["asked"] += 1
-								st.rerun()
+									st.session_state.wrongbook = [x for x in st.session_state.wrongbook if x != entry]
+									save_wrongbook(st.session_state.wrongbook)
+									if qidx < st.session_state.test_progress["total"] - 1:
+										st.session_state.test_progress["asked"] = qidx + 1
+										st.rerun()
+									else:
+										st.info("已经是最后一题，考察结束或提交当前结果。")
+								if btns[1].button("结束考察", key=f"end_after_{qidx}"):
+									# 结束本次考察：展示结果、气球、鼓励语，并清空当前考察队列
+									total = st.session_state.test_progress.get("total", 0)
+									correct = st.session_state.test_progress.get("correct", 0)
+									st.balloons()
+									st.success(f"已完成考察：{correct}/{total} 正确")
+									encouragements = [
+										"干得好！继续保持，每天进步一点。",
+										"坚持就是胜利，你离目标又近了一步！",
+										"优秀！复习错题会让你更稳固记忆。",
+									]
+									st.info(random.choice(encouragements))
+									st.session_state.test_queue = []
+									st.session_state.test_progress = {"asked": 0, "correct": 0, "total": 0}
+									st.rerun()
 						
 						else:
 							# 选择题模式
@@ -595,7 +648,7 @@ def main():
 						encouragements = [
 							"干得好！继续保持，每天进步一点。",
 							"坚持就是胜利，你离目标又近了一步！",
-							"优秀！复习错题会让你更稳固记忆。",
+							"优秀！复习会让你更稳固记忆。",
 						]
 						st.info(random.choice(encouragements))
 						if st.button("结束并清空本次考察", key="end_test"):
