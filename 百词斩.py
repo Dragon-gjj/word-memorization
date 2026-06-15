@@ -183,6 +183,23 @@ def main():
 	# UI: 左-中-右 三栏
 	left, mid, right = st.columns([1, 2, 1])
 
+	# 启动时显示使用说明（仅在中部显示）
+	if st.session_state.get("show_tutorial", False):
+		# 在中栏显示详细使用说明和关闭按钮
+		with mid:
+			st.container()
+			st.header("使用说明 — 百词斩")
+			st.markdown("本页面为单词背诵小工具的使用说明。您可以：")
+			st.markdown("- 导入单词表（CSV 或 每行 english<TAB>chinese），导入后需点击“确认导入”。")
+			st.markdown("- 在左侧配置 AI（OpenAI 或 千问 qianwen），配置仅保存在当前运行会话。")
+			st.markdown("- 使用“记忆模式”逐词背诵；使用“考察模式”进行拼写或选择题测试；错题会自动加入错题本。")
+			st.markdown("- 在错题记忆模式中复习并从错题本移除已掌握单词。")
+			st.caption("提示：如需持久化配置或调整 API Key 的放置方式（Authorization vs X-API-KEY），请修改代码或使用环境变量。")
+			# 关闭按钮放在中部，用户点击后关闭说明
+			if st.button("关闭 使用说明", key="close_tutorial_mid"):
+				st.session_state.show_tutorial = False
+				st.rerun()
+
 	# 会话状态初始化
 	if "words" not in st.session_state:
 		st.session_state.words = []  # list of dict {english, chinese}
@@ -200,6 +217,10 @@ def main():
 		st.session_state.wrongbook = load_wrongbook()
 	if "chat_history" not in st.session_state:
 		st.session_state.chat_history = []
+	# 是否显示启动使用说明（模态）
+	if "show_tutorial" not in st.session_state:
+		# 默认在首次打开时主动弹出说明
+		st.session_state.show_tutorial = True
 	# 保存记忆模式的当前位置，用于考察模式
 	if "memory_position" not in st.session_state:
 		st.session_state.memory_position = 0
@@ -215,6 +236,10 @@ def main():
 
 	with left:
 		st.header("操作面板")
+		# 快速打开使用说明
+		if st.button("显示使用说明", key="show_tutorial_btn"):
+			st.session_state.show_tutorial = True
+			st.rerun()
 		uploaded = st.file_uploader("导入单词表（CSV: english,chinese 或 每行 english<TAB>chinese）", type=["csv", "txt"])
 		if uploaded is not None:
 			try:
