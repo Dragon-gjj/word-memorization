@@ -66,7 +66,7 @@ def parse_wordfile(file_bytes) -> List[Dict]:
 		s = file_bytes.decode("gbk", errors="ignore")
 	# 尝试 CSV
 	if "\n" not in s:
-		s = s.replace("\\r", "\\n")
+		s = s.replace("\r", "\n")
 	lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
 	rows = []
 	# 如果第一行包含英文列名则用 pandas

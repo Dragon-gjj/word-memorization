@@ -23,7 +23,7 @@ python -m pip install -r requirements.txt
 启动应用：
 
 ```powershell
-streamlit run 百词斩.py
+streamlit run word_memo.py
 ```
 
 ## AI 助记（OpenAI / 千问 qianwen）
