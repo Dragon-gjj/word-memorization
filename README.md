@@ -6,7 +6,7 @@
 
 - `百词斩.py` — 主应用（Streamlit）。
 - `requirements.txt` — 依赖清单。
-- `sample_words.csv` — 示例单词表（可选）。
+- `High-frequency vocabulary for CET-6.csv` — 示例单词表（可选）。
 - `wrongbook.json` — 错题本（运行后生成并保存在同目录）。
 
 ## 快速开始（Windows / PowerShell）

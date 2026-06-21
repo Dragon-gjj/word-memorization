@@ -40,7 +40,7 @@ ALLOWED_KEYWORDS = [
 # 文件路径（在当前脚本目录）
 BASE_DIR = os.path.dirname(__file__)
 WRONGBOOK_PATH = os.path.join(BASE_DIR, "wrongbook.json")
-SAMPLE_CSV = os.path.join(BASE_DIR, "sample_words.csv")
+SAMPLE_CSV = os.path.join(BASE_DIR, "High-frequency vocabulary for CET-6.csv")
 
 
 def load_wrongbook() -> List[Dict]:
@@ -279,7 +279,7 @@ def main():
 				st.session_state.index = 0
 				st.success(f"已载入六级高频词汇，共 {len(sample)} 个单词")
 			else:
-				st.warning("未找到六级高频词汇文件 六级高频词汇.csv")
+				st.warning("未找到六级高频词汇文件 High-frequency vocabulary for CET-6.csv")
 
 		# --- AI 提供方与 API 配置（可选择国内自定义兼容接口）
 		st.write("---")
