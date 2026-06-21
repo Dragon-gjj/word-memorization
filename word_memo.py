@@ -272,14 +272,14 @@ def main():
 				st.session_state.pop("pending_import", None)
 				st.info("已取消导入")
 
-		if st.button("载入示例单词", key="load_sample"):
+		if st.button("载入六级高频词汇", key="load_sample"):
 			sample = load_sample()
 			if sample:
 				st.session_state.words = sample
 				st.session_state.index = 0
-				st.success(f"已载入示例，共 {len(sample)} 个单词")
+				st.success(f"已载入六级高频词汇，共 {len(sample)} 个单词")
 			else:
-				st.warning("未找到示例文件 sample_words.csv")
+				st.warning("未找到六级高频词汇文件 六级高频词汇.csv")
 
 		# --- AI 提供方与 API 配置（可选择国内自定义兼容接口）
 		st.write("---")
